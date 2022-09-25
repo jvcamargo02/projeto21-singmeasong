@@ -1,6 +1,7 @@
 import supertest from "supertest";
 import { prisma } from "../../src/database";
 import app from "../../src/app";
+import { faker } from "@faker-js/faker"
 
 import * as recommendationFactory from "../factories/recommendationsFactory";
 import { Recommendation } from "@prisma/client";
@@ -92,8 +93,6 @@ describe("POST /recommendations/:id/downvote", () => {
         const promise = await agent.post(`/recommendations/${recommendationBefore[0].id}/downvote`).send();
         const recommendationAfter: RecommendationData[] = await findRecommendation(name);
 
-        console.log(recommendationAfter);
-
         expect(promise.status).toBe(200);
         expect(recommendationAfter).toEqual([]);
     });
@@ -122,8 +121,106 @@ describe("GET /recommendations/:id", () => {
         expect(promise.status).toBe(200);
         expect(promise.body).toEqual(recommendation[0]);
     });
+
+    it("Should return status 404 if invalid id", async () => {
+        const promise = await agent.get(`/recommendations/1`).send();
+
+        expect(promise.status).toBe(404);
+    });
 });
 
+describe("GET /recommendations/random", () => {
+    jest.setTimeout(60000); //if your processing is impacted, increase the time
+    test.each([100, 200])( //by reducing the tests samples the tests can be harmed
+        "Should return status 200 and a recommendation with more than 10 upvotes 70% of request",
+
+        async (quantity) => {
+            let moreThan10Upvotes = []
+            await createManyRecomendations(quantity/10);
+
+            for (let i = 0; i < quantity; i++) {
+                const { name, youtubeLink } = await recommendationFactory.fakeRecommendation();
+
+                await prisma.recommendation.create({
+                    data: {
+                        name,
+                        youtubeLink,
+                        score: 15,
+                    },
+                });
+
+                const promise = await agent.get("/recommendations/random").send();
+
+                if(promise?.body?.score > 10) moreThan10Upvotes.push(promise.body)
+
+                expect(promise.status).toBe(200);
+            }
+            
+            
+            expect(moreThan10Upvotes.length).toBeGreaterThanOrEqual(quantity * 0.60)
+            expect(moreThan10Upvotes.length).toBeLessThanOrEqual(quantity * 0.80)
+        }
+    );
+
+    it("Should return status 200 and a recommendation", async () => {
+            const { name, youtubeLink } = await recommendationFactory.fakeRecommendation();
+
+            await prisma.recommendation.create({
+                data: {
+                    name,
+                    youtubeLink,
+                    score: 15,
+                },
+            });
+            const recommendation = await findRecommendation(name)
+
+            const promise = await agent.get("/recommendations/random").send();
+
+            expect(promise.status).toBe(200)
+            expect(promise.body).toEqual(recommendation[0])
+
+    })
+
+    it("Should return status 404 without recommendation in db", async () => {
+        const promise = await agent.get("/recommendations/random").send();
+
+        expect(promise.status).toBe(404)
+        expect(promise.body).toEqual({})
+    })
+});
+
+describe("GET /recommendations/top/:amount", () => { 
+
+    test.each([10, 15])("Should return status 200 and recommendations ordered by score", async (quantity) => {
+        for (let i = 0; i < quantity; i++) {
+            const { name, youtubeLink } = await recommendationFactory.fakeRecommendation();
+
+            await prisma.recommendation.create({
+                data: {
+                    name,
+                    youtubeLink,
+                    score: +faker.random.numeric(),
+                },
+            });
+        }
+
+        const recommendations = await prisma.recommendation.findMany({
+            orderBy: {
+                score: 'desc'
+            }
+        })
+
+        const promise = await agent.get(`/recommendations/top/${quantity}`).send();
+
+
+        expect(promise.status).toBe(200);
+        expect(promise.body).toEqual(recommendations)
+    })
+})
+
+afterAll(async () => {
+    await prisma.$disconnect()
+})
 
 
 async function findRecommendation(name: string): Promise<RecommendationData[]> {
