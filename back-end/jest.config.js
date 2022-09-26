@@ -11,4 +11,6 @@ export default {
   moduleNameMapper: {
     "^(\\.{1,2}/.*)\\.js$": "$1",
   },
+  collectCoverage: true,
+  coveragePathIgnorePatterns: ["/node_modules/", "/src/repositories/", "/src/utils/", "/test/factories" ]
 };

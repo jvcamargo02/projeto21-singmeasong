@@ -19,9 +19,11 @@ describe("POST /recommendations", () => {
         const { name, youtubeLink } = await recommendationFactory.fakeRecommendation();
 
         const promise = await postRecommendation(name, youtubeLink);
-        const recommendation: RecommendationData[] = await findRecommendation(name);
-
+        const recommendation = await findRecommendation(name);
+        console.log(recommendation)
+        console.log(name)
         expect(promise.status).toBe(201);
+
         expect(recommendation[0].name).toEqual(name);
         expect(recommendation[0].youtubeLink).toEqual(youtubeLink);
     });
@@ -100,7 +102,7 @@ describe("POST /recommendations/:id/downvote", () => {
 
 describe("GET /recommendations", () => {
     it("Should return status 200 and 10 latest recommendations", async () => {
-        const { expectedReturn, allRecommendation: unExpectedReturn } = await createManyRecomendations(15);
+        const { expectedReturn, allRecommendation: unExpectedReturn } = await recommendationFactory.createManyRecomendations(15);
 
         const promise = await agent.get("/recommendations").send();
 
@@ -136,7 +138,7 @@ describe("GET /recommendations/random", () => {
 
         async (quantity) => {
             let moreThan10Upvotes = []
-            await createManyRecomendations(quantity/10);
+            await recommendationFactory.createManyRecomendations(quantity/10);
 
             for (let i = 0; i < quantity; i++) {
                 const { name, youtubeLink } = await recommendationFactory.fakeRecommendation();
@@ -246,19 +248,4 @@ async function updatedRecommendation(name: string, score: number) {
     });
 }
 
-async function createManyRecomendations(quantity: number) {
-    let recommendationData = [];
 
-    for (let i = 0; i < quantity + 1; i++) {
-        recommendationData.push(await recommendationFactory.fakeRecommendation());
-    }
-
-    await prisma.recommendation.createMany({
-        data: recommendationData,
-    });
-
-    const allRecommendation = await prisma.recommendation.findMany({});
-    const expectedReturn = allRecommendation.slice(-10);
-
-    return { allRecommendation, expectedReturn };
-}
